@@ -65,6 +65,9 @@ if not compat.PY3:
 logger = logging.getLogger('pandas.io.gbq')
 logger.setLevel(logging.ERROR)
 
+# User supplied credentials that override credentials in the GbqConnector class
+_credentials = None
+
 class InvalidPageToken(PandasError, IOError):
     """
     Raised when Google BigQuery fails to return,
@@ -119,6 +122,10 @@ class GbqConnector:
         self.service        = self.get_service(self.credentials)
 
     def get_credentials(self):
+        # Use user-supplied override if provided
+        if _credentials is not None:
+            return _credentials
+
         flow = OAuth2WebServerFlow(client_id='495642085510-k0tmvj2m941jhre2nbqka17vqpjfddtd.apps.googleusercontent.com',
                                    client_secret='kOc9wMptUtxkcIFbtZCcrEAc',
                                    scope='https://www.googleapis.com/auth/bigquery',
@@ -433,3 +440,27 @@ def to_gbq(dataframe, destination_table, project_id=None, chunksize=10000,
     dataset_id, table_id = destination_table.rsplit('.',1)
 
     connector.load_data(dataframe, dataset_id, table_id, chunksize, verbose)
+
+def OverrideCredentials(credentials=None):
+    """
+    Provides a credentials object to be used in place of standard OAuth flow.
+
+    Calling this function with a credentials object will use the provided
+    credentials in place of the default OAuth flow.  Passing None will revert
+    to using default OAuth flow to obtain credentials.
+
+    Sample usage:
+
+    # Obtain credentials specific to a process running on Gogole Compute Engine
+    credentials = oauth2client.gce.AppAssertionCredentials()
+
+    pandas.io.gbq.OverrideCredentials(credentials)
+    pandas.io.gbq.read_gbq(...)
+
+    Parameters
+    ----------
+    credentials : oauth2client.client.Credentials (default: None)
+        Credentials object or None.
+    """
+    global _credentials
+    _credentials = credentials
